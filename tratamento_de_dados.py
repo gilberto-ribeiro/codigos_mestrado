@@ -6,6 +6,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
+paleta_gnuplot = ['#9400d3ff', '#009e73ff', '#56b4e9ff', '#e69f00ff', '#f0e442ff', '#0072b2ff', '#e51e10ff', '#000000ff']
+dashes = ['-', '--', '-.', ':']
+plt.rcParams['font.family'] = 'Courier New'
+
+
 class Condutivimetro:
 
     padrao_csv = re.compile('(\w+)_(\d+)_(\w+)_(\d+).csv')
@@ -132,6 +137,28 @@ Temperatura média: {self.temperatura_media:.1f} °C
     def resetar_dados(self):
         self.dados_tratados = self.dados_originais.copy()
 
+    def plotar_condutividade(self, normalizada=True, salvar=False):
+        if normalizada:
+            condutividade = self.condutividade_eletrica_normalizada
+            eixo_y = 'Condutividade elétrica normalizada'
+            limite_y = 0
+        else:
+            condutividade = self.condutividade_eletrica
+            eixo_y = 'Condutividade elétrica [mS]'
+            limite_y = None
+        fig, ax = plt.subplots()
+        ax.plot(self.tempo / 60, condutividade,
+                label=f'Eletrodo {self.numero_eletrodo}',
+                color=paleta_gnuplot[self.numero_eletrodo-1]
+                )
+        ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade')
+        ax.set_xlabel('Tempo [min]')
+        ax.set_ylabel(eixo_y)
+        ax.set_xlim([0, 15*((self.tempo[-1]/60)//15)])
+        ax.set_ylim(limite_y)
+        ax.legend()
+        plt.show()
+
     def _obter_arquivo(self):
         arquivo = os.path.basename(self._caminho)
         if __class__.padrao_csv.search(arquivo):
@@ -142,8 +169,8 @@ Temperatura média: {self.temperatura_media:.1f} °C
     
     def _obter_identificacao(self):
         self._prefixo = __class__.padrao_csv.search(self._arquivo).group(1)
-        self._numero_prefixo = __class__.padrao_csv.search(self._arquivo).group(2) 
-        self._numero_eletrodo = __class__.padrao_csv.search(self._arquivo).group(4) 
+        self._numero_prefixo = int(__class__.padrao_csv.search(self._arquivo).group(2))
+        self._numero_eletrodo = int(__class__.padrao_csv.search(self._arquivo).group(4))
 
     def _obter_base_de_dados(self):
         self._dados_originais = pd.read_csv(self._caminho, encoding='latin1', sep=';', decimal=',')
@@ -174,3 +201,21 @@ Temperatura média: {self.temperatura_media:.1f} °C
         dados['temperatura'] = dados['temperatura'].astype('float64')
         return dados
     
+
+class Ensaio:
+
+    def __init__(self, condutivimetros):
+        self._condutivimetros = condutivimetros
+
+    @property
+    def condutivimetros(self):
+        return self._condutivimetros
+
+    @property
+    def condutivimetros_dict(self):
+        return {condutivimetro.eletrodo: condutivimetro for condutivimetro in self.condutivimetros}
+
+    @property
+    def temperatura_media(self):
+        lista_temperatura_media = np.array([condutivimetro.temperatura_media for condutivimetro in self.condutivimetros])
+        return np.mean(lista_temperatura_media)
