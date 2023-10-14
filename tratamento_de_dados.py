@@ -210,7 +210,6 @@ class Ensaio:
     @property
     def condutivimetros(self):
         return self._condutivimetros
-
     @property
     def condutivimetros_dict(self):
         return {condutivimetro.eletrodo: condutivimetro for condutivimetro in self.condutivimetros}
@@ -219,3 +218,6 @@ class Ensaio:
     def temperatura_media(self):
         lista_temperatura_media = np.array([condutivimetro.temperatura_media for condutivimetro in self.condutivimetros])
         return np.mean(lista_temperatura_media)
+    
+    def __getitem__(self, chave):
+        return self.condutivimetros_dict[chave]
