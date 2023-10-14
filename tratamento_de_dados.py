@@ -115,15 +115,21 @@ class Condutivimetro:
     def temperatura_media(self):
         return self.dados_tratados['temperatura'].mean()
     
+    def obter_condutividade_eletrica(self, normalizada=False):
+        return self.condutividade_eletrica_normalizada if normalizada else self.condutividade_eletrica
+    
     def imprimir_relatorio(self):
-        print(
-f'''
-Relatório: {self.prefixo} {self.numero_prefixo} - Eletrodo {self.numero_eletrodo}
+        relatorio = f'''{"-" * 80}
+RELATÓRIO POR CONDUTIVÍMETRO
+
+{self.prefixo}: {self.numero_prefixo}
+Eletrodo: {self.numero_eletrodo}
 
 Data: {self.data}
 Horário de início: {self.horario_de_inicio}
 Horário de término: {self.horario_de_termino}
 
+Número de observações: {self.numero_de_observacoes}
 Intervalo entre cada observação: {self.intervalo_de_tempo} s
 
 Condutividade elétrica inicial: {self.condutividade_inicial:.1f} mS
@@ -131,19 +137,18 @@ Condutividade elétrica final: {self.condutividade_final:.1f} mS
 Condutividade elétrica máxima: {self.condutividade_maxima:.1f} mS
 
 Temperatura média: {self.temperatura_media:.1f} °C
-'''
-        )
+{"-" * 80}'''
+        print(relatorio)
 
     def resetar_dados(self):
         self.dados_tratados = self.dados_originais.copy()
 
-    def plotar_condutividade(self, normalizada=True, salvar=False):
+    def plotar_condutividade(self, normalizada=False, salvar=False):
+        condutividade = self.obter_condutividade_eletrica(normalizada)
         if normalizada:
-            condutividade = self.condutividade_eletrica_normalizada
             eixo_y = 'Condutividade elétrica normalizada'
             limite_y = 0
         else:
-            condutividade = self.condutividade_eletrica
             eixo_y = 'Condutividade elétrica [mS]'
             limite_y = None
         fig, ax = plt.subplots()
@@ -210,6 +215,7 @@ class Ensaio:
     @property
     def condutivimetros(self):
         return self._condutivimetros
+    
     @property
     def condutivimetros_dict(self):
         return {condutivimetro.eletrodo: condutivimetro for condutivimetro in self.condutivimetros}
@@ -219,5 +225,45 @@ class Ensaio:
         lista_temperatura_media = np.array([condutivimetro.temperatura_media for condutivimetro in self.condutivimetros])
         return np.mean(lista_temperatura_media)
     
+    @property
+    def intervalo_de_tempo(self):
+        lista_intervalo_de_tempo = [condutivimetro.intervalo_de_tempo for condutivimetro in self.condutivimetros]
+        if all(intervalo_de_tempo == lista_intervalo_de_tempo[0] for intervalo_de_tempo in lista_intervalo_de_tempo):
+            return lista_intervalo_de_tempo[0]
+        else:
+            print('Intervalos de tempo distintos')
+    
     def __getitem__(self, chave):
         return self.condutivimetros_dict[chave]
+    
+    def obter_condutividade_eletrica(self, normalizada=False, extendida=False):
+        lista_de_eletrodos = [pd.DataFrame({condutivimetro.eletrodo: condutivimetro.obter_condutividade_eletrica(normalizada)}) for condutivimetro in self.condutivimetros]
+        dados_condutividade_eletrica = pd.concat(lista_de_eletrodos, axis=1)
+        if (normalizada and extendida):
+            dados_condutividade_eletrica.fillna(1.0, inplace=True)
+        else:
+            dados_condutividade_eletrica.dropna(inplace=True)
+        tempo = np.array(dados_condutividade_eletrica.index * self.intervalo_de_tempo)
+        dados_condutividade_eletrica.insert(0, 'tempo', tempo)
+        return dados_condutividade_eletrica
+    
+    def plotar_condutividade(self, normalizada=False, extendida=False, salvar=False):
+        condutividade = self.obter_condutividade_eletrica(normalizada)
+        if normalizada:
+            eixo_y = 'Condutividade elétrica normalizada'
+            limite_y = 0
+        else:
+            eixo_y = 'Condutividade elétrica [mS]'
+            limite_y = None
+        fig, ax = plt.subplots()
+        ax.plot(self.tempo / 60, condutividade,
+                label=f'Eletrodo {self.numero_eletrodo}',
+                color=paleta_gnuplot[self.numero_eletrodo-1]
+                )
+        ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade')
+        ax.set_xlabel('Tempo [min]')
+        ax.set_ylabel(eixo_y)
+        ax.set_xlim([0, 15*((self.tempo[-1]/60)//15)])
+        ax.set_ylim(limite_y)
+        ax.legend()
+        plt.show()
