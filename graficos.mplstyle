@@ -1,16 +1,21 @@
-lines.linewidth: 0.75
+lines.linewidth: 0.5
 font.family: monospace
 font.monospace: Courier New
 axes.linewidth: 0.5
 axes.grid: True
 axes.grid.axis: both
 axes.grid.which: major
+axes.titlesize: medium
 axes.prop_cycle: cycler('color', ['9400d3', '009e73', '56b4e9', 'e69f00', 'f0e442', '0072b2', 'e51e10', '000000'])
 xtick.top: True
+xtick.major.width: 0.6
 xtick.direction: in
+xtick.minor.visible: True
 xtick.minor.ndivs: 5
 ytick.right: True
+ytick.major.width: 0.6
 ytick.direction: in
+ytick.minor.visible: True
 ytick.minor.ndivs: 5
 grid.color: "black"
 grid.linestyle: (0, (1, 10))
