@@ -4,11 +4,12 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib import ticker
 
+plt.style.use(os.path.join(os.path.dirname(__file__), 'graficos.mplstyle'))
 
-paleta_gnuplot = ['#9400d3ff', '#009e73ff', '#56b4e9ff', '#e69f00ff', '#f0e442ff', '#0072b2ff', '#e51e10ff', '#000000ff']
-dashes = ['-', '--', '-.', ':']
-plt.rcParams['font.family'] = 'Courier New'
+# paleta_gnuplot = ['#9400d3ff', '#009e73ff', '#56b4e9ff', '#e69f00ff', '#f0e442ff', '#0072b2ff', '#e51e10ff', '#000000ff']
+# dashes = ['-', '--', '-.', ':']
 
 padrao_csv = re.compile('(\w+)_(\d+)_(\w+)_(\d+).csv')
 padrao_diretorio = re.compile('(\w+)_(\d+)')
@@ -119,7 +120,7 @@ class Condutivimetro:
         return self.condutividade_eletrica_normalizada if normalizada else self.condutividade_eletrica
     
     def imprimir_relatorio(self):
-        relatorio = f'''{"-" * 80}
+        relatorio = f'''
 RELATÓRIO POR CONDUTIVÍMETRO
 
 {self.prefixo}: {self.numero_prefixo}
@@ -137,32 +138,41 @@ Condutividade elétrica final: {self.condutividade_final:.1f} mS
 Condutividade elétrica máxima: {self.condutividade_maxima:.1f} mS
 
 Temperatura média: {self.temperatura_media:.1f} °C
-{"-" * 80}'''
+'''
         print(relatorio)
 
     def resetar_dados(self):
         self.dados_tratados = self.dados_originais.copy()
 
-    def plotar_condutividade(self, normalizada=False, salvar=False, limite_eixo_x=None):
+    def plotar_condutividade_eletrica(self, normalizada=False, salvar=False, limite_eixo_x=None, caminho=None):
         condutividade = self.obter_condutividade_eletrica(normalizada)
         if normalizada:
             eixo_y = 'Condutividade elétrica normalizada'
             limite_y = 0
+            nome_do_arquivo = f'fig_gr_{self.prefixo.lower()}_{self.numero_prefixo}_{self.eletrodo}_perfil_de_condutividade_eletrica_normalizada'
         else:
             eixo_y = 'Condutividade elétrica [mS]'
             limite_y = None
+            nome_do_arquivo = f'fig_gr_{self.prefixo.lower()}_{self.numero_prefixo}_{self.eletrodo}_perfil_de_condutividade_eletrica'
         fig, ax = plt.subplots()
-        ax.plot(self.tempo / 60, condutividade,
-                label=f'Eletrodo {self.numero_eletrodo}',
-                color=paleta_gnuplot[self.numero_eletrodo-1]
-                )
+        ax.plot(self.tempo / 60, condutividade, label=f'Eletrodo {self.numero_eletrodo}')
         ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade elétrica')
         ax.set_xlabel('Tempo [min]')
         ax.set_ylabel(eixo_y)
         ax.set_xlim([0, 15*((self.tempo[-1]/60)//15)]) if limite_eixo_x is None else ax.set_xlim(limite_eixo_x)
         ax.set_ylim(limite_y)
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
+        ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
+        ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
         ax.legend()
         plt.show()
+        if salvar:
+            if caminho is None:
+                caminho = os.path.dirname(self.caminho)
+            else:
+                caminho = caminho
+            fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
+            fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
 
     def _obter_arquivo(self):
         arquivo = os.path.basename(self.caminho)
@@ -205,7 +215,7 @@ Temperatura média: {self.temperatura_media:.1f} °C
         dados['condutividade_eletrica'] = dados['condutividade_eletrica'].astype('float64')
         dados['temperatura'] = dados['temperatura'].astype('float64')
         return dados
-    
+
 
 class Ensaio:
 
@@ -272,28 +282,51 @@ class Ensaio:
         logaritmo_da_variancia = pd.DataFrame({'logaritmo_da_variancia': np.log10(np.sum(((c - 1)**2), axis=1)/n)})
         dados = pd.concat([dados_condutividade_eletrica, logaritmo_da_variancia], axis=1)
         return dados
+    
+    def obter_tempo_de_mistura(self, porcentagem=95):
+        dados = self.obter_logaritmo_da_variancia(extendida=True)
+        numero_de_pontos = dados.shape[0]
+        limite = np.log10((porcentagem/100 - 1)**2)
+        tempo_de_mistura = list()
+        for i in range(numero_de_pontos):
+            if i == 0:
+                continue
+            else:
+                if dados['logaritmo_da_variancia'][i] <= limite and dados['logaritmo_da_variancia'][i-1] > limite:
+                    tempo_de_mistura.append((dados['tempo'][i], dados['logaritmo_da_variancia'][i]))
+        return tempo_de_mistura
 
-    def plotar_condutividade_eletrica(self, normalizada=False, extendida=False, salvar=False, limite_eixo_x=None):
+    def plotar_condutividade_eletrica(self, normalizada=False, extendida=False, salvar=False, limite_eixo_x=None, caminho=None):
         condutividade = self.obter_condutividade_eletrica(normalizada, extendida)
         if normalizada:
             eixo_y = 'Condutividade elétrica normalizada'
             limite_y = 0
+            nome_do_arquivo = f'fig_gr_{self.prefixo.lower()}_{self.numero_prefixo}_perfil_de_condutividade_eletrica_normalizada'
         else:
             eixo_y = 'Condutividade elétrica [mS]'
             limite_y = None
+            nome_do_arquivo = f'fig_gr_{self.prefixo.lower()}_{self.numero_prefixo}_perfil_de_condutividade_eletrica'
         fig, ax = plt.subplots()
         for condutivimetro in self.condutivimetros:
             ax.plot(condutividade['tempo'] / 60, condutividade[condutivimetro.eletrodo],
-                    label=f'Eletrodo {condutivimetro.numero_eletrodo}',
-                    color=paleta_gnuplot[condutivimetro.numero_eletrodo-1]
+                    label=f'Eletrodo {condutivimetro.numero_eletrodo}'
                     )
         ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade elétrica')
         ax.set_xlabel('Tempo [min]')
         ax.set_ylabel(eixo_y)
         ax.set_xlim([0, 15*((np.array(condutividade['tempo'])[-1]/60)//15)]) if limite_eixo_x is None else ax.set_xlim(limite_eixo_x)
         ax.set_ylim(limite_y)
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
+        ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
         ax.legend()
         plt.show()
+        if salvar:
+            if caminho is None:
+                caminho = self.caminho
+            else:
+                caminho = caminho
+            fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
+            fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
 
     def _obter_diretorio(self):
         diretorio = os.path.basename(self.caminho)

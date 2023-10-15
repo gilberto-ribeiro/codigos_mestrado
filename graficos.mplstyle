@@ -1,0 +1,21 @@
+lines.linewidth: 0.75
+font.family: monospace
+font.monospace: Courier New
+axes.linewidth: 0.5
+axes.grid: True
+axes.grid.axis: both
+axes.grid.which: major
+axes.prop_cycle: cycler('color', ['9400d3', '009e73', '56b4e9', 'e69f00', 'f0e442', '0072b2', 'e51e10', '000000'])
+xtick.top: True
+xtick.direction: in
+xtick.minor.ndivs: 5
+ytick.right: True
+ytick.direction: in
+ytick.minor.ndivs: 5
+grid.color: "black"
+grid.linestyle: (0, (1, 10))
+grid.linewidth: 0.25
+legend.fancybox: False
+legend.edgecolor: "white"
+figure.figsize: 6.3, 3.6
+savefig.dpi: 300
