@@ -144,7 +144,7 @@ Temperatura média: {self.temperatura_media:.1f} °C
     def resetar_dados(self):
         self.dados_tratados = self.dados_originais.copy()
 
-    def plotar_condutividade_eletrica(self, normalizada=False, salvar=False, limite_eixo_x=None, caminho=None):
+    def plotar_condutividade_eletrica(self, normalizada=False, salvar=False, intervalo=None, caminho=None):
         condutividade = self.obter_condutividade_eletrica(normalizada)
         if normalizada:
             eixo_y = 'Condutividade elétrica normalizada'
@@ -159,11 +159,10 @@ Temperatura média: {self.temperatura_media:.1f} °C
         ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade elétrica')
         ax.set_xlabel('Tempo [min]')
         ax.set_ylabel(eixo_y)
-        ax.set_xlim([0, 15*((self.tempo[-1]/60)//15)]) if limite_eixo_x is None else ax.set_xlim(limite_eixo_x)
+        ax.set_xlim([0, 15*((self.tempo[-1]/60)//15)]) if intervalo is None else ax.set_xlim(intervalo)
         ax.set_ylim(limite_y)
         ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
         ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
-        ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
         ax.legend()
         plt.show()
         if salvar:
@@ -219,8 +218,9 @@ Temperatura média: {self.temperatura_media:.1f} °C
 
 class Ensaio:
 
-    def __init__(self, caminho):
+    def __init__(self, caminho, porcentagem):
         self._caminho = caminho
+        self._porcentagem = porcentagem
         self._obter_diretorio()
         self._instanciar_condutivimetros()
 
@@ -239,10 +239,22 @@ class Ensaio:
     @property
     def numero_prefixo(self):
         return self._numero_prefixo
+
+    @property
+    def ensaio(self):
+        return self._diretorio
     
     @property
     def condutivimetros(self):
         return self._condutivimetros
+    
+    @property
+    def porcentagem(self):
+        return self._porcentagem
+
+    @property
+    def limite(self):
+        return np.log10((self.porcentagem/100 - 1)**2)
     
     @property
     def condutivimetros_dict(self):
@@ -260,9 +272,27 @@ class Ensaio:
             return lista_intervalo_de_tempo[0]
         else:
             print('Intervalos de tempo distintos')
+
+    @property
+    def tempos_de_mistura(self):
+        return self._obter_tempos_de_mistura()
     
     def __getitem__(self, chave):
         return self.condutivimetros_dict[chave]
+    
+    def imprimir_relatorio(self):
+        tempos_de_mistura_a_imprimir = '\n    '.join([f'{tm[0]:.0f} s | {tm[0]/60:.2f} min' for tm in self.tempos_de_mistura])
+        relatorio = f'''
+RELATÓRIO POR {self.prefixo.upper()}
+
+{self.prefixo}: {self.numero_prefixo}
+
+Possíveis tempos de mistura ({self.porcentagem}%: {self.limite:.2f}):
+    {tempos_de_mistura_a_imprimir}
+
+Temperatura média: {self.temperatura_media:.1f} °C
+'''
+        print(relatorio)
     
     def obter_condutividade_eletrica(self, normalizada=False, extendida=False):
         lista_de_eletrodos = [pd.DataFrame({condutivimetro.eletrodo: condutivimetro.obter_condutividade_eletrica(normalizada)}) for condutivimetro in self.condutivimetros]
@@ -282,30 +312,17 @@ class Ensaio:
         logaritmo_da_variancia = pd.DataFrame({'logaritmo_da_variancia': np.log10(np.sum(((c - 1)**2), axis=1)/n)})
         dados = pd.concat([dados_condutividade_eletrica, logaritmo_da_variancia], axis=1)
         return dados
-    
-    def obter_tempo_de_mistura(self, porcentagem=95):
-        dados = self.obter_logaritmo_da_variancia(extendida=True)
-        numero_de_pontos = dados.shape[0]
-        limite = np.log10((porcentagem/100 - 1)**2)
-        tempo_de_mistura = list()
-        for i in range(numero_de_pontos):
-            if i == 0:
-                continue
-            else:
-                if dados['logaritmo_da_variancia'][i] <= limite and dados['logaritmo_da_variancia'][i-1] > limite:
-                    tempo_de_mistura.append((dados['tempo'][i], dados['logaritmo_da_variancia'][i]))
-        return tempo_de_mistura
 
-    def plotar_condutividade_eletrica(self, normalizada=False, extendida=False, salvar=False, limite_eixo_x=None, caminho=None):
+    def plotar_condutividade_eletrica(self, normalizada=False, extendida=False, salvar=False, intervalo=None, caminho=None):
         condutividade = self.obter_condutividade_eletrica(normalizada, extendida)
         if normalizada:
             eixo_y = 'Condutividade elétrica normalizada'
             limite_y = 0
-            nome_do_arquivo = f'fig_gr_{self.prefixo.lower()}_{self.numero_prefixo}_perfil_de_condutividade_eletrica_normalizada'
+            nome_do_arquivo = f'fig_gr_{self.ensaio}_perfil_de_condutividade_eletrica_normalizada'
         else:
             eixo_y = 'Condutividade elétrica [mS]'
             limite_y = None
-            nome_do_arquivo = f'fig_gr_{self.prefixo.lower()}_{self.numero_prefixo}_perfil_de_condutividade_eletrica'
+            nome_do_arquivo = f'fig_gr_{self.ensaio}_perfil_de_condutividade_eletrica'
         fig, ax = plt.subplots()
         for condutivimetro in self.condutivimetros:
             ax.plot(condutividade['tempo'] / 60, condutividade[condutivimetro.eletrodo],
@@ -314,13 +331,37 @@ class Ensaio:
         ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade elétrica')
         ax.set_xlabel('Tempo [min]')
         ax.set_ylabel(eixo_y)
-        ax.set_xlim([0, 15*((np.array(condutividade['tempo'])[-1]/60)//15)]) if limite_eixo_x is None else ax.set_xlim(limite_eixo_x)
+        ax.set_xlim([0, 15*((np.array(condutividade['tempo'])[-1]/60)//15)]) if intervalo is None else ax.set_xlim(intervalo)
         ax.set_ylim(limite_y)
         ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
-        ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
         ax.legend()
         plt.show()
         if salvar:
+            if caminho is None:
+                caminho = self.caminho
+            else:
+                caminho = caminho
+            fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
+            fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
+
+    def plotar_logaritmo_da_variancia(self, extendida=False, salvar=False, intervalo=None, caminho=None):
+        dados = self.obter_logaritmo_da_variancia(extendida)
+        logaritmo_da_variancia = np.array(dados['logaritmo_da_variancia'])
+        tempo = np.array(dados['tempo'])
+        fig, ax = plt.subplots()
+        ax.plot(tempo / 60, logaritmo_da_variancia, label=f'{self.prefixo} {self.numero_prefixo}')
+        ax.plot([0, tempo[-1]/60], [self.limite]*2, color='gray', ls='--')
+        ax.text(0, self.limite, f'{self.porcentagem}%: {self.limite:.2f}', color='gray', fontsize='xx-small')
+        ax.set_title(f'Logaritmo da variância RMS por tempo')
+        ax.set_xlabel('Tempo [min]')
+        ax.set_ylabel('Logaritmo da variância RMS da\ncondutividade elétrica normalizada')
+        ax.set_xlim([0, 15*((tempo[-1]/60)//15)]) if intervalo is None else ax.set_xlim(intervalo)
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
+        ax.grid(which='minor')
+        ax.legend()
+        plt.show()
+        if salvar:
+            nome_do_arquivo = f'fig_gr_{self.ensaio}_logaritmo_da_variancia'
             if caminho is None:
                 caminho = self.caminho
             else:
@@ -343,3 +384,15 @@ class Ensaio:
     def _instanciar_condutivimetros(self):
         lista_de_arquivos = os.listdir(self.caminho)
         self._condutivimetros = [Condutivimetro(os.path.join(self.caminho, arquivo)) for arquivo in lista_de_arquivos if padrao_csv.search(arquivo)]
+    
+    def _obter_tempos_de_mistura(self):
+        dados = self.obter_logaritmo_da_variancia(extendida=True)
+        numero_de_pontos = dados.shape[0]
+        tempos_de_mistura = list()
+        for i in range(numero_de_pontos):
+            if i == 0:
+                continue
+            else:
+                if dados['logaritmo_da_variancia'][i] <= self.limite and dados['logaritmo_da_variancia'][i-1] > self.limite:
+                    tempos_de_mistura.append((dados['tempo'][i], dados['logaritmo_da_variancia'][i]))
+        return tempos_de_mistura
