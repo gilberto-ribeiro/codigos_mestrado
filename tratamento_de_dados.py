@@ -10,10 +10,10 @@ paleta_gnuplot = ['#9400d3ff', '#009e73ff', '#56b4e9ff', '#e69f00ff', '#f0e442ff
 dashes = ['-', '--', '-.', ':']
 plt.rcParams['font.family'] = 'Courier New'
 
+padrao_csv = re.compile('(\w+)_(\d+)_(\w+)_(\d+).csv')
+padrao_diretorio = re.compile('(\w+)_(\d+)')
 
 class Condutivimetro:
-
-    padrao_csv = re.compile('(\w+)_(\d+)_(\w+)_(\d+).csv')
 
     def __init__(self, caminho):
         self._caminho = caminho
@@ -143,7 +143,7 @@ Temperatura média: {self.temperatura_media:.1f} °C
     def resetar_dados(self):
         self.dados_tratados = self.dados_originais.copy()
 
-    def plotar_condutividade(self, normalizada=False, salvar=False):
+    def plotar_condutividade(self, normalizada=False, salvar=False, limite_eixo_x=None):
         condutividade = self.obter_condutividade_eletrica(normalizada)
         if normalizada:
             eixo_y = 'Condutividade elétrica normalizada'
@@ -156,29 +156,29 @@ Temperatura média: {self.temperatura_media:.1f} °C
                 label=f'Eletrodo {self.numero_eletrodo}',
                 color=paleta_gnuplot[self.numero_eletrodo-1]
                 )
-        ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade')
+        ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade elétrica')
         ax.set_xlabel('Tempo [min]')
         ax.set_ylabel(eixo_y)
-        ax.set_xlim([0, 15*((self.tempo[-1]/60)//15)])
+        ax.set_xlim([0, 15*((self.tempo[-1]/60)//15)]) if limite_eixo_x is None else ax.set_xlim(limite_eixo_x)
         ax.set_ylim(limite_y)
         ax.legend()
         plt.show()
 
     def _obter_arquivo(self):
-        arquivo = os.path.basename(self._caminho)
-        if __class__.padrao_csv.search(arquivo):
+        arquivo = os.path.basename(self.caminho)
+        if padrao_csv.search(arquivo):
             self._arquivo = arquivo
             self._obter_identificacao()
         else:
             pass
     
     def _obter_identificacao(self):
-        self._prefixo = __class__.padrao_csv.search(self._arquivo).group(1)
-        self._numero_prefixo = int(__class__.padrao_csv.search(self._arquivo).group(2))
-        self._numero_eletrodo = int(__class__.padrao_csv.search(self._arquivo).group(4))
+        self._prefixo = padrao_csv.search(self.arquivo).group(1)
+        self._numero_prefixo = int(padrao_csv.search(self.arquivo).group(2))
+        self._numero_eletrodo = int(padrao_csv.search(self.arquivo).group(4))
 
     def _obter_base_de_dados(self):
-        self._dados_originais = pd.read_csv(self._caminho, encoding='latin1', sep=';', decimal=',')
+        self._dados_originais = pd.read_csv(self.caminho, encoding='latin1', sep=';', decimal=',')
 
     def _tratar_base_de_dados(self):
         dados = self._dados_originais.iloc[:, 0:4].copy()
@@ -209,9 +209,27 @@ Temperatura média: {self.temperatura_media:.1f} °C
 
 class Ensaio:
 
-    def __init__(self, condutivimetros):
-        self._condutivimetros = condutivimetros
+    def __init__(self, caminho):
+        self._caminho = caminho
+        self._obter_diretorio()
+        self._instanciar_condutivimetros()
 
+    @property
+    def caminho(self):
+        return self._caminho
+
+    @property
+    def diretorio(self):
+        return self._diretorio
+
+    @property
+    def prefixo(self):
+        return self._prefixo.capitalize()
+
+    @property
+    def numero_prefixo(self):
+        return self._numero_prefixo
+    
     @property
     def condutivimetros(self):
         return self._condutivimetros
@@ -246,9 +264,17 @@ class Ensaio:
         tempo = np.array(dados_condutividade_eletrica.index * self.intervalo_de_tempo)
         dados_condutividade_eletrica.insert(0, 'tempo', tempo)
         return dados_condutividade_eletrica
-    
-    def plotar_condutividade(self, normalizada=False, extendida=False, salvar=False):
-        condutividade = self.obter_condutividade_eletrica(normalizada)
+
+    def obter_logaritmo_da_variancia(self, extendida=False):
+        dados_condutividade_eletrica =  self.obter_condutividade_eletrica(normalizada=True, extendida=extendida)
+        n = dados_condutividade_eletrica.shape[1] - 1
+        c = np.array(dados_condutividade_eletrica.iloc[:, 1:].copy())
+        logaritmo_da_variancia = pd.DataFrame({'logaritmo_da_variancia': np.log10(np.sum(((c - 1)**2), axis=1)/n)})
+        dados = pd.concat([dados_condutividade_eletrica, logaritmo_da_variancia], axis=1)
+        return dados
+
+    def plotar_condutividade_eletrica(self, normalizada=False, extendida=False, salvar=False, limite_eixo_x=None):
+        condutividade = self.obter_condutividade_eletrica(normalizada, extendida)
         if normalizada:
             eixo_y = 'Condutividade elétrica normalizada'
             limite_y = 0
@@ -256,14 +282,31 @@ class Ensaio:
             eixo_y = 'Condutividade elétrica [mS]'
             limite_y = None
         fig, ax = plt.subplots()
-        ax.plot(self.tempo / 60, condutividade,
-                label=f'Eletrodo {self.numero_eletrodo}',
-                color=paleta_gnuplot[self.numero_eletrodo-1]
-                )
-        ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade')
+        for condutivimetro in self.condutivimetros:
+            ax.plot(condutividade['tempo'] / 60, condutividade[condutivimetro.eletrodo],
+                    label=f'Eletrodo {condutivimetro.numero_eletrodo}',
+                    color=paleta_gnuplot[condutivimetro.numero_eletrodo-1]
+                    )
+        ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade elétrica')
         ax.set_xlabel('Tempo [min]')
         ax.set_ylabel(eixo_y)
-        ax.set_xlim([0, 15*((self.tempo[-1]/60)//15)])
+        ax.set_xlim([0, 15*((np.array(condutividade['tempo'])[-1]/60)//15)]) if limite_eixo_x is None else ax.set_xlim(limite_eixo_x)
         ax.set_ylim(limite_y)
         ax.legend()
         plt.show()
+
+    def _obter_diretorio(self):
+        diretorio = os.path.basename(self.caminho)
+        if padrao_diretorio.search(diretorio):
+            self._diretorio = diretorio
+            self._obter_identificacao()
+        else:
+            pass
+    
+    def _obter_identificacao(self):
+        self._prefixo = padrao_diretorio.search(self.diretorio).group(1)
+        self._numero_prefixo = int(padrao_diretorio.search(self.diretorio).group(2))
+
+    def _instanciar_condutivimetros(self):
+        lista_de_arquivos = os.listdir(self.caminho)
+        self._condutivimetros = [Condutivimetro(os.path.join(self.caminho, arquivo)) for arquivo in lista_de_arquivos if padrao_csv.search(arquivo)]
