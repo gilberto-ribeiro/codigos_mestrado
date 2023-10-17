@@ -218,7 +218,7 @@ Temperatura média: {self.temperatura_media:.1f} °C
 
 class Ensaio:
 
-    def __init__(self, caminho, porcentagem):
+    def __init__(self, caminho, porcentagem=95):
         self._caminho = caminho
         self._porcentagem = porcentagem
         self._obter_diretorio()
@@ -249,16 +249,16 @@ class Ensaio:
         return self._condutivimetros
     
     @property
+    def condutivimetros_dict(self):
+        return {condutivimetro.eletrodo: condutivimetro for condutivimetro in self.condutivimetros}
+    
+    @property
     def porcentagem(self):
         return self._porcentagem
 
     @property
     def limite(self):
         return np.log10((self.porcentagem/100 - 1)**2)
-    
-    @property
-    def condutivimetros_dict(self):
-        return {condutivimetro.eletrodo: condutivimetro for condutivimetro in self.condutivimetros}
 
     @property
     def temperatura_media(self):
@@ -396,3 +396,46 @@ Temperatura média: {self.temperatura_media:.1f} °C
                 if dados['logaritmo_da_variancia'][i] <= self.limite and dados['logaritmo_da_variancia'][i-1] > self.limite:
                     tempos_de_mistura.append((dados['tempo'][i], dados['logaritmo_da_variancia'][i]))
         return tempos_de_mistura
+    
+
+class Experimento:
+
+    def __init__(self, caminho, lista=None):
+        self._caminho = caminho
+        self._lista = lista
+        self._instanciar_ensaios()
+
+    @property
+    def caminho(self):
+        return self._caminho
+    
+    @property
+    def lista(self):
+        return self._lista
+    
+    @property
+    def ensaios(self):
+        return self._ensaios
+    
+    @property
+    def ensaios_dict(self):
+        return {ensaio.ensaio: ensaio for ensaio in self.ensaios}
+    
+    def __getitem__(self, chave):
+        return self.ensaios_dict[chave]
+
+    def _obter_lista_de_ensaios(self):
+        lista_de_diretorios = os.listdir(self.caminho)
+        lista_de_ensaios = list()
+        for ensaio in lista_de_diretorios:
+            if padrao_diretorio.search(ensaio):
+                numero_do_ensaio = padrao_diretorio.search(ensaio).group(2)
+                if self.lista is None:
+                    lista_de_ensaios.append(ensaio)
+                elif numero_do_ensaio in self._lista:
+                    lista_de_ensaios.append(ensaio)
+        return lista_de_ensaios
+    
+    def _instanciar_ensaios(self):
+        lista_de_ensaios = self._obter_lista_de_ensaios()
+        self._ensaios = [Ensaio(os.path.join(self.caminho, diretorio)) for diretorio in lista_de_ensaios]
