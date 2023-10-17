@@ -8,8 +8,8 @@ from matplotlib import ticker
 
 plt.style.use(os.path.join(os.path.dirname(__file__), 'graficos.mplstyle'))
 
-# paleta_gnuplot = ['#9400d3ff', '#009e73ff', '#56b4e9ff', '#e69f00ff', '#f0e442ff', '#0072b2ff', '#e51e10ff', '#000000ff']
-# dashes = ['-', '--', '-.', ':']
+paleta_gnuplot = ['#9400d3ff', '#009e73ff', '#56b4e9ff', '#e69f00ff', '#f0e442ff', '#0072b2ff', '#e51e10ff', '#000000ff']
+dashes = ['-', '--', '-.', ':']
 
 padrao_csv = re.compile('(\w+)_(\d+)_(\w+)_(\d+).csv')
 padrao_diretorio = re.compile('(\w+)_(\d+)')
@@ -349,7 +349,10 @@ Temperatura média: {self.temperatura_media:.1f} °C
         logaritmo_da_variancia = np.array(dados['logaritmo_da_variancia'])
         tempo = np.array(dados['tempo'])
         fig, ax = plt.subplots()
-        ax.plot(tempo / 60, logaritmo_da_variancia, label=f'{self.prefixo} {self.numero_prefixo}')
+        ax.plot(tempo / 60, logaritmo_da_variancia,
+                color=f'C{self.numero_prefixo%8 - 1}',
+                ls=dashes[self.numero_prefixo//8],
+                label=f'{self.prefixo} {self.numero_prefixo}')
         ax.plot([0, tempo[-1]/60], [self.limite]*2, color='gray', ls='--')
         ax.text(0, self.limite, f'{self.porcentagem}%: {self.limite:.2f}', color='gray', fontsize='xx-small')
         ax.set_title(f'Logaritmo da variância RMS por tempo')
@@ -383,6 +386,8 @@ Temperatura média: {self.temperatura_media:.1f} °C
 
     def _instanciar_condutivimetros(self):
         lista_de_arquivos = os.listdir(self.caminho)
+        # Verificar como ordenar os eletrodos:
+        # lista_de_arquivos.sort(key=lambda arquivo: int(padrao_csv.search(arquivo).group(4)))
         self._condutivimetros = [Condutivimetro(os.path.join(self.caminho, arquivo)) for arquivo in lista_de_arquivos if padrao_csv.search(arquivo)]
     
     def _obter_tempos_de_mistura(self):
@@ -423,17 +428,51 @@ class Experimento:
     
     def __getitem__(self, chave):
         return self.ensaios_dict[chave]
+    
+    def plotar_logaritmo_da_variancia(self, extendida=False, salvar=False, intervalo=None, caminho=None):
+        fig, ax = plt.subplots()
+        lista_de_tempos = list()
+        for ensaio in self.ensaios:
+            dados = ensaio.obter_logaritmo_da_variancia(extendida)
+            logaritmo_da_variancia = np.array(dados['logaritmo_da_variancia'])
+            tempo = np.array(dados['tempo'])
+            lista_de_tempos.append(tempo[-1])
+            limite, porcentagem = ensaio.limite, ensaio.porcentagem
+            ax.plot(tempo / 60, logaritmo_da_variancia,
+                    ls=dashes[ensaio.numero_prefixo//8],
+                    label=f'{ensaio.prefixo} {ensaio.numero_prefixo}')
+        tempo_maximo = max(lista_de_tempos)
+        # Refatorar as duas linhas a baixo, pois pega limite e porcentagem do último ensaio
+        ax.plot([0, tempo_maximo/60], [limite]*2, color='gray', ls='--')
+        ax.text(0, limite, f'{porcentagem}%: {limite:.2f}', color='gray', fontsize='xx-small')
+        ax.set_title(f'Logaritmo da variância RMS por tempo')
+        ax.set_xlabel('Tempo [min]')
+        ax.set_ylabel('Logaritmo da variância RMS da\ncondutividade elétrica normalizada')
+        ax.set_xlim([0, 15*((tempo_maximo/60)//15)]) if intervalo is None else ax.set_xlim(intervalo)
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
+        ax.grid(which='minor')
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        plt.show()
+        if salvar:
+            nome_do_arquivo = f'fig_gr_logaritmo_da_variancia'
+            if caminho is None:
+                caminho = self.caminho
+            else:
+                caminho = caminho
+            fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
+            fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
 
     def _obter_lista_de_ensaios(self):
         lista_de_diretorios = os.listdir(self.caminho)
         lista_de_ensaios = list()
         for ensaio in lista_de_diretorios:
             if padrao_diretorio.search(ensaio):
-                numero_do_ensaio = padrao_diretorio.search(ensaio).group(2)
+                numero_do_ensaio = int(padrao_diretorio.search(ensaio).group(2))
                 if self.lista is None:
                     lista_de_ensaios.append(ensaio)
                 elif numero_do_ensaio in self._lista:
                     lista_de_ensaios.append(ensaio)
+        lista_de_ensaios.sort(key=lambda ensaio: int(padrao_diretorio.search(ensaio).group(2)))
         return lista_de_ensaios
     
     def _instanciar_ensaios(self):
