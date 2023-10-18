@@ -1,5 +1,6 @@
-import os
 import re
+import os
+import shutil
 from datetime import datetime
 import numpy as np
 import pandas as pd
@@ -7,6 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib import ticker
 
 plt.style.use(os.path.join(os.path.dirname(__file__), 'graficos.mplstyle'))
+np.seterr(divide='ignore')
 
 paleta_gnuplot = ['#9400d3ff', '#009e73ff', '#56b4e9ff', '#e69f00ff', '#f0e442ff', '#0072b2ff', '#e51e10ff', '#000000ff']
 dashes = ['-', '--', '-.', ':']
@@ -140,6 +142,7 @@ Condutividade elétrica máxima: {self.condutividade_maxima:.1f} mS
 Temperatura média: {self.temperatura_media:.1f} °C
 '''
         print(relatorio)
+        return relatorio
 
     def resetar_dados(self):
         self.dados_tratados = self.dados_originais.copy()
@@ -223,6 +226,24 @@ class Ensaio:
         self._porcentagem = porcentagem
         self._obter_diretorio()
         self._instanciar_condutivimetros()
+        self._color_id = (self.numero_prefixo - 1) % 8
+        self._ls_id = (self.numero_prefixo - 1) // 8
+
+    @property
+    def color_id(self):
+        return self._color_id
+
+    @property
+    def ls_id(self):
+        return self._ls_id
+    
+    @color_id.setter
+    def color_id(self, color_id):
+        self._color_id = color_id
+    
+    @ls_id.setter
+    def ls_id(self, ls_id):
+        self._ls_id = ls_id
 
     @property
     def caminho(self):
@@ -293,6 +314,7 @@ Possíveis tempos de mistura ({self.porcentagem}%: {self.limite:.2f}):
 Temperatura média: {self.temperatura_media:.1f} °C
 '''
         print(relatorio)
+        return relatorio
     
     def obter_condutividade_eletrica(self, normalizada=False, extendida=False):
         lista_de_eletrodos = [pd.DataFrame({condutivimetro.eletrodo: condutivimetro.obter_condutividade_eletrica(normalizada)}) for condutivimetro in self.condutivimetros]
@@ -350,10 +372,11 @@ Temperatura média: {self.temperatura_media:.1f} °C
         tempo = np.array(dados['tempo'])
         fig, ax = plt.subplots()
         ax.plot(tempo / 60, logaritmo_da_variancia,
-                color=f'C{self.numero_prefixo%8 - 1}',
-                ls=dashes[self.numero_prefixo//8],
+                color=f'C{self.color_id}',
+                ls=dashes[self.ls_id],
                 label=f'{self.prefixo} {self.numero_prefixo}')
-        ax.plot([0, tempo[-1]/60], [self.limite]*2, color='gray', ls='--')
+        ax.plot([0, tempo[-1]/60] if intervalo is None else intervalo,
+                [self.limite]*2, color='gray', ls='--')
         ax.text(0, self.limite, f'{self.porcentagem}%: {self.limite:.2f}', color='gray', fontsize='xx-small')
         ax.set_title(f'Logaritmo da variância RMS por tempo')
         ax.set_xlabel('Tempo [min]')
@@ -409,6 +432,7 @@ class Experimento:
         self._caminho = caminho
         self._lista = lista
         self._instanciar_ensaios()
+        self._redefinir_ids()
 
     @property
     def caminho(self):
@@ -429,8 +453,27 @@ class Experimento:
     def __getitem__(self, chave):
         return self.ensaios_dict[chave]
     
+    def obter_resultados(self):
+        diretorio_resultados = os.path.join(self.caminho, 'resultados')
+        diretorio_figuras = os.path.join(diretorio_resultados, 'figuras')
+        if os.path.exists(diretorio_resultados):
+            shutil.rmtree(diretorio_resultados)
+        os.mkdir(diretorio_resultados)
+        os.mkdir(diretorio_figuras)
+        self.plotar_logaritmo_da_variancia(salvar=True, caminho=diretorio_figuras)
+        with open(os.path.join(diretorio_resultados, 'relatorio.txt'), 'w') as arquivo_relatorio:
+            arquivo_relatorio.write('RELATÓRIO DO EXPERIMENTO\n')
+            for ensaio in self.ensaios:
+                ensaio.plotar_condutividade_eletrica(normalizada=True, salvar=True, caminho=diretorio_figuras)
+                ensaio.plotar_logaritmo_da_variancia(salvar=True, caminho=diretorio_figuras)
+                arquivo_relatorio.write('\n' + '-' * 80 + f' {ensaio.numero_prefixo:02}' + '\n')
+                arquivo_relatorio.write(ensaio.imprimir_relatorio())
+                for eletrodo in ensaio.condutivimetros:
+                    arquivo_relatorio.write(eletrodo.imprimir_relatorio())
+        arquivo_relatorio.close()
+
     def plotar_logaritmo_da_variancia(self, extendida=False, salvar=False, intervalo=None, caminho=None):
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(7, 3.5))
         lista_de_tempos = list()
         for ensaio in self.ensaios:
             dados = ensaio.obter_logaritmo_da_variancia(extendida)
@@ -439,11 +482,13 @@ class Experimento:
             lista_de_tempos.append(tempo[-1])
             limite, porcentagem = ensaio.limite, ensaio.porcentagem
             ax.plot(tempo / 60, logaritmo_da_variancia,
-                    ls=dashes[ensaio.numero_prefixo//8],
-                    label=f'{ensaio.prefixo} {ensaio.numero_prefixo}')
+                color=f'C{ensaio.color_id}',
+                ls=dashes[ensaio.ls_id],
+                label=f'{ensaio.prefixo} {ensaio.numero_prefixo}')
         tempo_maximo = max(lista_de_tempos)
         # Refatorar as duas linhas a baixo, pois pega limite e porcentagem do último ensaio
-        ax.plot([0, tempo_maximo/60], [limite]*2, color='gray', ls='--')
+        ax.plot([0, tempo_maximo/60] if intervalo is None else intervalo,
+                [limite]*2, color='gray', ls='--')
         ax.text(0, limite, f'{porcentagem}%: {limite:.2f}', color='gray', fontsize='xx-small')
         ax.set_title(f'Logaritmo da variância RMS por tempo')
         ax.set_xlabel('Tempo [min]')
@@ -452,6 +497,7 @@ class Experimento:
         ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
         ax.grid(which='minor')
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        plt.tight_layout()
         plt.show()
         if salvar:
             nome_do_arquivo = f'fig_gr_logaritmo_da_variancia'
@@ -478,3 +524,8 @@ class Experimento:
     def _instanciar_ensaios(self):
         lista_de_ensaios = self._obter_lista_de_ensaios()
         self._ensaios = [Ensaio(os.path.join(self.caminho, diretorio)) for diretorio in lista_de_ensaios]
+
+    def _redefinir_ids(self):
+        for id, ensaio in enumerate(self.ensaios):
+            ensaio.color_id = id % 8
+            ensaio.ls_id = id // 8
