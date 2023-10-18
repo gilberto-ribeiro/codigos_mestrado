@@ -22,5 +22,5 @@ grid.linestyle: (0, (1, 10))
 grid.linewidth: 0.25
 legend.fancybox: False
 legend.edgecolor: "white"
-figure.figsize: 6.3, 3.6
+figure.figsize: 5.5, 3.5
 savefig.dpi: 300
