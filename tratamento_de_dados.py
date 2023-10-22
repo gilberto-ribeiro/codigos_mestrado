@@ -159,6 +159,9 @@ Temperatura média: {self.temperatura_media:.1f} °C
             nome_do_arquivo = f'fig_gr_{self.prefixo.lower()}_{self.numero_prefixo}_{self.eletrodo}_perfil_de_condutividade_eletrica'
         fig, ax = plt.subplots()
         ax.plot(self.tempo / 60, condutividade, label=f'Eletrodo {self.numero_eletrodo}')
+        if normalizada:
+            ax.fill_between([0, np.array(self.tempo)[-1] / 60] if intervalo is None else intervalo,
+                            [0.95, 0.95], [1.05, 1.05], color='gray', alpha=0.25)
         ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade elétrica')
         ax.set_xlabel('Tempo [min]')
         ax.set_ylabel(eixo_y)
@@ -350,6 +353,9 @@ Temperatura média: {self.temperatura_media:.1f} °C
             ax.plot(condutividade['tempo'] / 60, condutividade[condutivimetro.eletrodo],
                     label=f'Eletrodo {condutivimetro.numero_eletrodo}'
                     )
+        if normalizada:
+            ax.fill_between([0, np.array(condutividade['tempo'])[-1] / 60] if intervalo is None else intervalo,
+                            [0.95, 0.95], [1.05, 1.05], color='gray', alpha=0.25)
         ax.set_title(f'{self.prefixo} {self.numero_prefixo} - Perfil de condutividade elétrica')
         ax.set_xlabel('Tempo [min]')
         ax.set_ylabel(eixo_y)
@@ -507,6 +513,33 @@ class Experimento:
                 caminho = caminho
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
+    
+    def combinar_ensaios(self, dados, prefixo='ensaio', diretorio='ensaios_novo', colunas=None, lista=None):
+        if type(dados) is list:
+            dados = __class__._importar_dados_do_google_sheets(*dados)
+        if colunas is None:
+            colunas = ['ensaio_antigo', 'ensaio_novo', 'eletrodos_antigo', 'eletrodos_novo']
+        diretorio = os.path.join(self.caminho, diretorio)
+        if os.path.exists(diretorio):
+            shutil.rmtree(diretorio)
+        os.mkdir(diretorio)
+        for i in dados.index:
+            ensaio_antigo = f'{prefixo}_{dados[colunas[0]][i]}'
+            ensaio_novo = f'{prefixo}_{dados[colunas[1]][i]}'
+            eletrodos_antigo = dados[colunas[2]][i].split('_')
+            eletrodos_antigo = [f'eletrodo_{eletrodo_antigo}' for eletrodo_antigo in eletrodos_antigo]
+            eletrodos_novo = dados[colunas[3]][i].split('_')
+            eletrodos_novo = [f'eletrodo_{eletrodo_novo}' for eletrodo_novo in eletrodos_novo]
+            diretorio_ensaio_antigo = self[ensaio_antigo].caminho
+            diretorio_ensaio_novo = os.path.join(diretorio, ensaio_novo)
+            if ensaio_antigo in self.ensaios_dict:
+                if not os.path.exists(diretorio_ensaio_novo):
+                    os.mkdir(diretorio_ensaio_novo)
+                for eletrodo_antigo, eletrodo_novo in zip(eletrodos_antigo, eletrodos_novo):
+                    arquivo_antigo = os.path.join(diretorio_ensaio_antigo, f'{ensaio_antigo}_{eletrodo_antigo}.csv')
+                    arquivo_novo = os.path.join(diretorio_ensaio_novo, f'{ensaio_novo}_{eletrodo_novo}.csv')
+                    shutil.copy(arquivo_antigo, arquivo_novo)
+        return __class__(diretorio ,lista)
 
     def _obter_lista_de_ensaios(self):
         lista_de_diretorios = os.listdir(self.caminho)
@@ -529,3 +562,9 @@ class Experimento:
         for id, ensaio in enumerate(self.ensaios):
             ensaio.color_id = id % 8
             ensaio.ls_id = id // 8
+
+    @staticmethod
+    def _importar_dados_do_google_sheets(url_planilha, aba_planilha):
+        id_planilha = re.search('https://docs.google.com/spreadsheets/d/(.*)/', url_planilha).group(1)
+        url = f'https://docs.google.com/spreadsheets/d/{id_planilha}/gviz/tq?tqx=out:csv&sheet={aba_planilha}'
+        return pd.read_csv(url)
