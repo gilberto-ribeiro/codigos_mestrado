@@ -6,7 +6,8 @@ axes.grid: True
 axes.grid.axis: both
 axes.grid.which: major
 axes.titlesize: medium
-axes.prop_cycle: cycler('color', ['9400d3', '009e73', '56b4e9', 'e69f00', 'f0e442', '0072b2', 'e51e10', '000000'])
+# axes.prop_cycle: cycler('color', ['9400d3', '009e73', '56b4e9', 'e69f00', 'f0e442', '0072b2', 'e51e10', '000000'])
+axes.prop_cycle: cycler('color', ['9400d3', '009e73', '56b4e9', 'e69f00', 'f0e442', 'e51e10', '0072b2', '000000'])
 xtick.top: True
 xtick.major.width: 0.6
 xtick.direction: in
