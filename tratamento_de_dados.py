@@ -478,6 +478,45 @@ class Experimento:
                     arquivo_relatorio.write(eletrodo.imprimir_relatorio())
         arquivo_relatorio.close()
 
+    def plotar_condutividade_eletrica(self, combinacao, normalizada=False, extendida=False, salvar=False, intervalo=None, caminho=None):
+        if normalizada:
+            eixo_y = 'Condutividade elétrica normalizada'
+            limite_y = 0
+            nome_do_arquivo = f'fig_gr_perfil_de_condutividade_eletrica_normalizada'
+        else:
+            eixo_y = 'Condutividade elétrica [mS]'
+            limite_y = None
+            nome_do_arquivo = f'fig_gr_perfil_de_condutividade_eletrica'
+        lista_de_tempos = list()
+        fig, ax = plt.subplots()
+        for ensaio in combinacao:
+            for eletrodo in combinacao[ensaio]:
+                condutividade = self[f'ensaio_{ensaio}'][f'eletrodo_{eletrodo}'].obter_condutividade_eletrica(normalizada)
+                tempo = self[f'ensaio_{ensaio}'][f'eletrodo_{eletrodo}'].tempo
+                lista_de_tempos.append(tempo[-1])
+                ax.plot(tempo / 60, condutividade,
+                        label=f'Ens. {ensaio} - El. {eletrodo}'
+                        )
+        tempo_maximo = max(lista_de_tempos)
+        if normalizada:
+            ax.fill_between([0, tempo_maximo/60] if intervalo is None else intervalo,
+                            [0.95, 0.95], [1.05, 1.05], color='gray', alpha=0.25)
+        ax.set_title(f'Perfil de condutividade elétrica')
+        ax.set_xlabel('Tempo [min]')
+        ax.set_ylabel(eixo_y)
+        ax.set_xlim([0, 15*((tempo_maximo/60)//15)]) if intervalo is None else ax.set_xlim(intervalo)
+        ax.set_ylim(limite_y)
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize='x-small')
+        plt.show()
+        if salvar:
+            if caminho is None:
+                caminho = self.caminho
+            else:
+                caminho = caminho
+            fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
+            fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
+
     def plotar_logaritmo_da_variancia(self, extendida=False, salvar=False, intervalo=None, caminho=None):
         fig, ax = plt.subplots(figsize=(7, 3.5))
         lista_de_tempos = list()
