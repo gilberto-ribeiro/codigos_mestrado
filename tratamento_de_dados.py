@@ -1,7 +1,7 @@
 import re
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -224,13 +224,16 @@ Temperatura média: {self.temperatura_media:.1f} °C
 
 class Ensaio:
 
-    def __init__(self, caminho, porcentagem=95):
+    def __init__(self, caminho, porcentagem=95, dados_correcao_horarios=None):
         self._caminho = caminho
         self._porcentagem = porcentagem
         self._obter_diretorio()
         self._instanciar_condutivimetros()
         self._color_id = (self.numero_prefixo - 1) % 8
         self._ls_id = (self.numero_prefixo - 1) // 8
+        if dados_correcao_horarios is not None:
+            self._dados_correcao_horarios = dados_correcao_horarios
+            self._corrigir_horarios_iniciais()
 
     @property
     def color_id(self):
@@ -431,6 +434,35 @@ Temperatura média: {self.temperatura_media:.1f} °C
                     tempos_de_mistura.append((dados['tempo'][i], dados['logaritmo_da_variancia'][i]))
         return tempos_de_mistura
     
+    def _corrigir_horarios_iniciais(self):
+        dados = self._dados_correcao_horarios
+        if type(dados) is list:
+            dados = Experimento._importar_dados_do_google_sheets(*dados)
+        dados['data'] = dados['data'].apply(lambda x: datetime.strptime(x, '%d/%m/%Y'))
+        lista_de_eletrodos = [coluna for coluna in dados.columns if re.search('eletrodo_\d+', coluna) and (coluna in self.condutivimetros_dict)]
+        for eletrodo in lista_de_eletrodos:
+            dados[eletrodo] = dados[eletrodo].apply(lambda x: datetime.strptime(x, '%H:%M:%S'))
+        for eletrodo in lista_de_eletrodos:
+            dados[f'{eletrodo}_normalizado'] = dados[eletrodo] - dados[lista_de_eletrodos].min(axis=1)
+        lista_de_eletrodos_normalizados = [f'{eletrodo}_normalizado' for eletrodo in lista_de_eletrodos]
+        dados_por_dia = dados[lista_de_eletrodos_normalizados].groupby(dados['data']).mean().copy()
+        dados_por_dia = dados_por_dia.map(lambda x: x.seconds)
+        colunas_a_renomear = {eletrodo_normalizado: eletrodo for eletrodo, eletrodo_normalizado in zip(lista_de_eletrodos, lista_de_eletrodos_normalizados)}
+        dados_por_dia.rename(columns=colunas_a_renomear, inplace=True)
+        lista_de_horarios_iniciais = list()
+        for eletrodo in self.condutivimetros_dict:
+            data_eletrodo = datetime.strptime(self[eletrodo].data, '%d/%m/%Y')
+            data_correcao = max([data for data in dados_por_dia.index if data <= data_eletrodo])
+            fator_de_correcao = int(dados_por_dia.loc[data_correcao, eletrodo])
+            self[eletrodo]._dados_tratados['horario'] = self[eletrodo]._dados_tratados['horario'].apply(lambda x: x - timedelta(seconds=fator_de_correcao))
+            lista_de_horarios_iniciais.append(self[eletrodo].dados_tratados['horario'][0])
+        ultimo_tempo_inicial = max(lista_de_horarios_iniciais)
+        print(ultimo_tempo_inicial)
+        for eletrodo in self.condutivimetros_dict:
+            selecao = self[eletrodo].dados_tratados['horario'] >= ultimo_tempo_inicial
+            self[eletrodo]._dados_tratados = self[eletrodo]._dados_tratados[selecao].copy()
+            self[eletrodo]._dados_tratados.reset_index(drop=True, inplace=True)
+            
 
 class Experimento:
 
