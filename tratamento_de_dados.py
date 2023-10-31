@@ -151,7 +151,7 @@ Temperatura média: {self.temperatura_media:.1f} °C
         condutividade = self.obter_condutividade_eletrica(normalizada)
         if normalizada:
             eixo_y = 'Condutividade elétrica normalizada'
-            limite_y = 0
+            limite_y = [0, 2]
             nome_do_arquivo = f'fig_gr_{self.prefixo.lower()}_{self.numero_prefixo}_{self.eletrodo}_perfil_de_condutividade_eletrica_normalizada'
         else:
             eixo_y = 'Condutividade elétrica [mS]'
@@ -345,7 +345,7 @@ Temperatura média: {self.temperatura_media:.1f} °C
         condutividade = self.obter_condutividade_eletrica(normalizada, extendida)
         if normalizada:
             eixo_y = 'Condutividade elétrica normalizada'
-            limite_y = 0
+            limite_y = [0, 2]
             nome_do_arquivo = f'fig_gr_{self.ensaio}_perfil_de_condutividade_eletrica_normalizada'
         else:
             eixo_y = 'Condutividade elétrica [mS]'
@@ -455,10 +455,15 @@ Temperatura média: {self.temperatura_media:.1f} °C
             data_correcao = max([data for data in dados_por_dia.index if data <= data_eletrodo])
             fator_de_correcao = int(dados_por_dia.loc[data_correcao, eletrodo])
             self[eletrodo]._dados_tratados['horario'] = self[eletrodo]._dados_tratados['horario'].apply(lambda x: x - timedelta(seconds=fator_de_correcao))
-            lista_de_horarios_iniciais.append(self[eletrodo].dados_tratados['horario'][0])
-        ultimo_tempo_inicial = max(lista_de_horarios_iniciais)
-        print(ultimo_tempo_inicial)
+            horario_inicial = self[eletrodo].dados_tratados['horario'][0]
+            valores = [eletrodo, data_eletrodo, data_correcao, fator_de_correcao, horario_inicial]
+            lista_de_horarios_iniciais.append(valores)
+        colunas = ['eletrodo', 'data_eletrodo', 'data_correcao', 'fator_de_correcao', 'horario_inicial']
+        dados_de_correcao = pd.DataFrame(lista_de_horarios_iniciais, columns=colunas)
+        tabela_ultimo_tempo_inicial = dados_de_correcao['horario_inicial'].groupby(dados_de_correcao['data_correcao']).max()
         for eletrodo in self.condutivimetros_dict:
+            data_correcao = dados_de_correcao['data_correcao'][dados_de_correcao['eletrodo'] == eletrodo]
+            ultimo_tempo_inicial = tabela_ultimo_tempo_inicial[data_correcao].iloc[0]
             selecao = self[eletrodo].dados_tratados['horario'] >= ultimo_tempo_inicial
             self[eletrodo]._dados_tratados = self[eletrodo]._dados_tratados[selecao].copy()
             self[eletrodo]._dados_tratados.reset_index(drop=True, inplace=True)
@@ -513,7 +518,7 @@ class Experimento:
     def plotar_condutividade_eletrica(self, combinacao, normalizada=False, extendida=False, salvar=False, intervalo=None, caminho=None):
         if normalizada:
             eixo_y = 'Condutividade elétrica normalizada'
-            limite_y = 0
+            limite_y = [0, 2]
             nome_do_arquivo = f'fig_gr_perfil_de_condutividade_eletrica_normalizada'
         else:
             eixo_y = 'Condutividade elétrica [mS]'
