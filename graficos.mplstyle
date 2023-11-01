@@ -7,8 +7,7 @@ axes.grid.axis: both
 axes.grid.which: major
 axes.titlesize: medium
 # axes.prop_cycle: cycler('color', ['9400d3', '009e73', '56b4e9', 'e69f00', 'f0e442', '0072b2', 'e51e10', '000000'])
-# axes.prop_cycle: cycler('color', ['9400d3', '009e73', '56b4e9', 'e69f00', 'f0e442', 'e51e10', '0072b2', '000000'])
-axes.prop_cycle: cycler('color', ['9400d3', '009e73', 'e69f00', 'f0e442', 'e51e10', '56b4e9', '0072b2', '000000'])
+axes.prop_cycle: cycler('color', ['9400d3', '009e73', '56b4e9', 'e69f00', 'f0e442', 'e51e10', '0072b2', '000000'])
 xtick.top: True
 xtick.major.width: 0.6
 xtick.direction: in
@@ -26,4 +25,4 @@ legend.fancybox: False
 legend.edgecolor: "white"
 legend.fontsize: small
 figure.figsize: 5.5, 3.5
-savefig.dpi: 300
+savefig.dpi: 600
