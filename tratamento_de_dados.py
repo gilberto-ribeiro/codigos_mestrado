@@ -354,7 +354,8 @@ Temperatura média: {self.temperatura_media:.1f} °C
         fig, ax = plt.subplots()
         for condutivimetro in self.condutivimetros:
             ax.plot(condutividade['tempo'] / 60, condutividade[condutivimetro.eletrodo],
-                    label=f'Eletrodo {condutivimetro.numero_eletrodo}'
+                    label=f'Eletrodo {condutivimetro.numero_eletrodo}',
+                    color=f'C{condutivimetro.numero_eletrodo-1}'
                     )
         if normalizada:
             ax.fill_between([0, np.array(condutividade['tempo'])[-1] / 60] if intervalo is None else intervalo,
@@ -471,9 +472,10 @@ Temperatura média: {self.temperatura_media:.1f} °C
 
 class Experimento:
 
-    def __init__(self, caminho, lista=None):
+    def __init__(self, caminho, lista=None, dados_correcao_horarios=None):
         self._caminho = caminho
         self._lista = lista
+        self._dados_correcao_horarios = dados_correcao_horarios
         self._instanciar_ensaios()
         self._redefinir_ids()
 
@@ -496,8 +498,8 @@ class Experimento:
     def __getitem__(self, chave):
         return self.ensaios_dict[chave]
     
-    def obter_resultados(self):
-        diretorio_resultados = os.path.join(self.caminho, 'resultados')
+    def obter_resultados(self, diretorio='resultados'):
+        diretorio_resultados = os.path.join(self.caminho, diretorio)
         diretorio_figuras = os.path.join(diretorio_resultados, 'figuras')
         if os.path.exists(diretorio_resultados):
             shutil.rmtree(diretorio_resultados)
@@ -590,7 +592,7 @@ class Experimento:
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
     
-    def combinar_ensaios(self, dados, prefixo='ensaio', diretorio='ensaios_novo', colunas=None, lista=None):
+    def combinar_ensaios(self, dados, prefixo='ensaio', diretorio='ensaios_novo', colunas=None, lista=None, dados_correcao_horarios=None):
         if type(dados) is list:
             dados = __class__._importar_dados_do_google_sheets(*dados)
         if colunas is None:
@@ -615,7 +617,7 @@ class Experimento:
                     arquivo_antigo = os.path.join(diretorio_ensaio_antigo, f'{ensaio_antigo}_{eletrodo_antigo}.csv')
                     arquivo_novo = os.path.join(diretorio_ensaio_novo, f'{ensaio_novo}_{eletrodo_novo}.csv')
                     shutil.copy(arquivo_antigo, arquivo_novo)
-        return __class__(diretorio ,lista)
+        return __class__(diretorio, lista=lista, dados_correcao_horarios=dados_correcao_horarios)
 
     def _obter_lista_de_ensaios(self):
         lista_de_diretorios = os.listdir(self.caminho)
@@ -632,7 +634,7 @@ class Experimento:
     
     def _instanciar_ensaios(self):
         lista_de_ensaios = self._obter_lista_de_ensaios()
-        self._ensaios = [Ensaio(os.path.join(self.caminho, diretorio)) for diretorio in lista_de_ensaios]
+        self._ensaios = [Ensaio(os.path.join(self.caminho, diretorio), dados_correcao_horarios = self._dados_correcao_horarios) for diretorio in lista_de_ensaios]
 
     def _redefinir_ids(self):
         for id, ensaio in enumerate(self.ensaios):
