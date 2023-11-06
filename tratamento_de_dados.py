@@ -1,5 +1,6 @@
 import re
 import os
+import math
 import shutil
 from datetime import datetime, timedelta
 import numpy as np
@@ -646,3 +647,92 @@ class Experimento:
         id_planilha = re.search('https://docs.google.com/spreadsheets/d/(.*)/', url_planilha).group(1)
         url = f'https://docs.google.com/spreadsheets/d/{id_planilha}/gviz/tq?tqx=out:csv&sheet={aba_planilha}'
         return pd.read_csv(url)
+    
+
+class Simulacao:
+
+    def __init__(self, caminho):
+        self._caminho = caminho
+
+    @property
+    def caminho(self):
+        return self._caminho
+
+    @property
+    def caminho_cases(self):
+        return os.path.join(self._caminho, 'cases')
+
+    @property
+    def caminho_running(self):
+        return os.path.join(self.caminho_cases, 'running')
+
+    def obter_outputlog(self):
+        coluna_iteracao = ['iter']
+        colunas_residuos = ['continuity', 'x-velocity', 'y-velocity', 'z-velocity', 'k', 'omega']
+        arquivos_log = [os.path.join(self.caminho_running, arquivo) \
+                        for arquivo in os.listdir(self.caminho_running) \
+                        if re.search('output.*\.log', arquivo)]
+        outputlog = list()
+        for arquivo_log in arquivos_log:
+            flag = False
+            dados = list()
+            with open(arquivo_log, 'r', encoding='utf-8') as arquivo:
+                for linha in arquivo:
+                    if linha.strip().startswith('iter') and flag is False:
+                        colunas = linha.strip().split()[0:-1]
+                        colunas_reports = [coluna for coluna in colunas \
+                                          if coluna not in (coluna_iteracao + colunas_residuos)]
+                        flag = True
+                    if flag and re.search('\d$', linha):
+                        dados.append(linha.strip().split()[0:-2])
+            arquivo.close()
+            dados = pd.DataFrame(dados, columns=colunas)
+            dados[coluna_iteracao] = dados[coluna_iteracao].astype(int)
+            dados[colunas_residuos] = dados[colunas_residuos].astype(float)
+            dados[colunas_reports] = dados[colunas_reports].astype(float)
+            outputlog.append(dados)
+        outputlog = pd.concat(outputlog)
+        outputlog.sort_values('iter', inplace=True)
+        outputlog.reset_index(drop=True, inplace=True)
+        return outputlog
+
+    def plotar_outputlog(self, disposicao, graficos):
+        outputlog = self.obter_outputlog()
+        indices = self._gerar_indices_dos_graficos(disposicao)
+        fig, axs = plt.subplots(*disposicao, figsize=(16, 9), dpi=600)
+        for indice, parametros in zip(indices, graficos):
+            self._gerar_grafico_individual_outputlog(axs[*indice], outputlog, **parametros)
+        plt.yscale('log')
+        parametros_residuos = {
+            'titulo': 'Resíduos',
+            'eixo_y': 'Resíduos',
+            'variaveis': ['continuity', 'x-velocity', 'y-velocity', 'z-velocity', 'k', 'omega']
+        }
+        self._gerar_grafico_individual_outputlog(axs[*indices[-1]], outputlog, **parametros_residuos)
+        plt.show()
+
+    @staticmethod
+    def _gerar_grafico_individual_outputlog(ax, dados, titulo, eixo_y, variaveis, legendas=None, eixo_x='Iteração'):
+        x = dados['iter']
+        if legendas is None:
+            legendas = variaveis
+        for variavel, legenda in zip(variaveis, legendas):
+            y = dados[variavel]
+            ax.plot(x, y, label=legenda, lw=1)
+        ax.set_title(titulo)
+        ax.set_ylabel(eixo_y)
+        ax.set_xlabel(eixo_x)
+        if len(legendas) != 1:
+            ax.legend()
+
+    @staticmethod
+    def _gerar_indices_dos_graficos(disposicao):
+        indices = list()
+        if 1 in disposicao:
+            for i in range(math.prod(list(disposicao))):
+                indices.append([i])
+        else:
+            for i in range(disposicao[0]):
+                for j in range(disposicao[1]):
+                    indices.append((i, j))
+        return indices
