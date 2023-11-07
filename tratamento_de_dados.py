@@ -657,6 +657,12 @@ class Simulacao:
     @property
     def caminho(self):
         return self._caminho
+    
+    @property
+    def numero_da_simulacao(self):
+        diretorio = os.path.basename(self.caminho)
+        numero_da_simulacao = re.search('^(\d{2})_.*', diretorio).group(1)
+        return numero_da_simulacao
 
     @property
     def caminho_cases(self):
@@ -696,7 +702,7 @@ class Simulacao:
         outputlog.reset_index(drop=True, inplace=True)
         return outputlog
 
-    def plotar_outputlog(self, disposicao, graficos):
+    def plotar_outputlog(self, disposicao, graficos, salvar=False):
         outputlog = self.obter_outputlog()
         indices = self._gerar_indices_dos_graficos(disposicao)
         fig, axs = plt.subplots(*disposicao, figsize=(16, 9), dpi=600)
@@ -710,6 +716,9 @@ class Simulacao:
         }
         self._gerar_grafico_individual_outputlog(axs[*indices[-1]], outputlog, **parametros_residuos)
         plt.show()
+        if salvar:
+            fig.savefig(os.path.join(self.caminho_running, f'fig_gr_case_{self.numero_da_simulacao}_outputlog.pdf'))
+            fig.savefig(os.path.join(self.caminho_running, f'fig_gr_case_{self.numero_da_simulacao}_outputlog.png'))
 
     @staticmethod
     def _gerar_grafico_individual_outputlog(ax, dados, titulo, eixo_y, variaveis, legendas=None, eixo_x='Iteração'):
