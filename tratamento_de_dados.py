@@ -5,6 +5,7 @@ import shutil
 from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
+from scipy.optimize import fsolve
 import matplotlib.pyplot as plt
 from matplotlib import ticker
 
@@ -659,10 +660,12 @@ class Simulacao:
         return self._caminho
     
     @property
+    def diretorio(self):
+        return os.path.basename(self.caminho)
+    
+    @property
     def numero_da_simulacao(self):
-        diretorio = os.path.basename(self.caminho)
-        numero_da_simulacao = re.search('^(\d{2})_.*', diretorio).group(1)
-        return numero_da_simulacao
+        return re.search('^(\d{2})_.*', self.diretorio).group(1)
 
     @property
     def caminho_cases(self):
@@ -745,3 +748,30 @@ class Simulacao:
                 for j in range(disposicao[1]):
                     indices.append((i, j))
         return indices
+    
+    @staticmethod
+    def determinar_gci(h, phi):
+        r = list()
+        epsilon = list()
+        for i in range(2):
+            r.append(h[i+1] / h[i])
+            epsilon.append(phi[i+1] - phi[i])
+
+        def eq3(x, r, epsilon):
+            p, q, s = x
+            eq3a = p - (1/np.log(r[0]))*np.abs(np.log(np.abs(epsilon[1]/epsilon[0])) + q)
+            eq3b = q - np.log((r[0]**p - s)/(r[1]**p - s))
+            eq3c = s - np.sign(epsilon[1] / epsilon[0])
+            return [eq3a, eq3b, eq3c]
+        
+        p = fsolve(eq3, [1, 1, 1], args=(r, epsilon))[0]
+        phi_ext = ((r[0]**p)*phi[0] - phi[1]) / (r[0]**p - 1)
+        e_a = np.abs((phi[0] - phi[1]) / (phi[0]))
+        e_ext = np.abs((phi_ext - phi[0]) / (phi_ext))
+        gci_fine = (1.25*e_a) / (r[0]**p - 1)
+        dados = pd.DataFrame([[h, *r, p, *phi, phi_ext, f'{e_a:.2%}', f'{e_ext:.2%}', f'{gci_fine:.2%}']],
+                            columns=['h', 'r21', 'r32', 'p',
+                                    'phi_1', 'phi_2', 'phi_3', 'phi_ext',
+                                    'e_a', 'e_ext', 'gci_fine'],
+                            index = ['gci']).transpose()
+        return dados
