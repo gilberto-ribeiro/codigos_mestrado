@@ -441,6 +441,7 @@ Temperatura média: {self.temperatura_media:.1f} °C
         dados = self._dados_correcao_horarios
         if type(dados) is list:
             dados = Experimento._importar_dados_do_google_sheets(*dados)
+        dados = dados.astype(str)
         dados['data'] = dados['data'].apply(lambda x: datetime.strptime(x, '%d/%m/%Y'))
         lista_de_eletrodos = [coluna for coluna in dados.columns if re.search('eletrodo_\d+', coluna) and (coluna in self.condutivimetros_dict)]
         for eletrodo in lista_de_eletrodos:
