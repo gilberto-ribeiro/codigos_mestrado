@@ -20,6 +20,7 @@ ytick.minor.ndivs: 5
 grid.color: "black"
 grid.linestyle: (0, (1, 10))
 grid.linewidth: 0.25
+legend.loc: upper right
 legend.fancybox: False
 legend.edgecolor: "white"
 legend.fontsize: small
