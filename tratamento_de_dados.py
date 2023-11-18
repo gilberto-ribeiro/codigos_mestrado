@@ -20,11 +20,16 @@ padrao_diretorio = re.compile('(\w+)_(\d+)')
 
 class Condutivimetro:
 
-    def __init__(self, caminho):
+    def __init__(self, caminho, janela_media_movel=None):
         self._caminho = caminho
+        self._janela_media_movel = janela_media_movel
         self._obter_arquivo()
         self._obter_base_de_dados()
         self._tratar_base_de_dados()
+
+    @property
+    def janela_media_movel(self):
+        return self._janela_media_movel
 
     @property
     def caminho(self):
@@ -208,6 +213,8 @@ Temperatura média: {self.temperatura_media:.1f} °C
         dados = dados.reindex(columns=['horario', 'condutividade_eletrica', 'temperatura'])
         self._dados_tratados_originais = dados
         self._dados_tratados = dados.copy()
+        if type(self.janela_media_movel) is int and self.janela_media_movel != 0:
+            self._dados_tratados['condutividade_eletrica'] = self._dados_tratados['condutividade_eletrica'].rolling(self.janela_media_movel, min_periods=1).mean()
 
     @staticmethod
     def _obter_horario(dados):
@@ -226,9 +233,10 @@ Temperatura média: {self.temperatura_media:.1f} °C
 
 class Ensaio:
 
-    def __init__(self, caminho, porcentagem=95, dados_correcao_horarios=None):
+    def __init__(self, caminho, porcentagem=95, dados_correcao_horarios=None, janela_media_movel=None):
         self._caminho = caminho
         self._porcentagem = porcentagem
+        self._janela_media_movel = janela_media_movel
         self._obter_diretorio()
         self._instanciar_condutivimetros()
         self._color_id = (self.numero_prefixo - 1) % 8
@@ -236,6 +244,10 @@ class Ensaio:
         if dados_correcao_horarios is not None:
             self._dados_correcao_horarios = dados_correcao_horarios
             self._corrigir_horarios_iniciais()
+
+    @property
+    def janela_media_movel(self):
+        return self._janela_media_movel
 
     @property
     def color_id(self):
@@ -423,7 +435,7 @@ Temperatura média: {self.temperatura_media:.1f} °C
         lista_de_arquivos = os.listdir(self.caminho)
         # Verificar como ordenar os eletrodos:
         # lista_de_arquivos.sort(key=lambda arquivo: int(padrao_csv.search(arquivo).group(4)))
-        self._condutivimetros = [Condutivimetro(os.path.join(self.caminho, arquivo)) for arquivo in lista_de_arquivos if padrao_csv.search(arquivo)]
+        self._condutivimetros = [Condutivimetro(os.path.join(self.caminho, arquivo), janela_media_movel=self.janela_media_movel) for arquivo in lista_de_arquivos if padrao_csv.search(arquivo)]
     
     def _obter_tempos_de_mistura(self):
         dados = self.obter_logaritmo_da_variancia(extendida=True)
@@ -475,12 +487,17 @@ Temperatura média: {self.temperatura_media:.1f} °C
 
 class Experimento:
 
-    def __init__(self, caminho, lista=None, dados_correcao_horarios=None):
+    def __init__(self, caminho, lista=None, dados_correcao_horarios=None, janela_media_movel=None):
         self._caminho = caminho
         self._lista = lista
         self._dados_correcao_horarios = dados_correcao_horarios
+        self._janela_media_movel = janela_media_movel
         self._instanciar_ensaios()
         self._redefinir_ids()
+
+    @property
+    def janela_media_movel(self):
+        return self._janela_media_movel
 
     @property
     def caminho(self):
@@ -637,7 +654,7 @@ class Experimento:
     
     def _instanciar_ensaios(self):
         lista_de_ensaios = self._obter_lista_de_ensaios()
-        self._ensaios = [Ensaio(os.path.join(self.caminho, diretorio), dados_correcao_horarios = self._dados_correcao_horarios) for diretorio in lista_de_ensaios]
+        self._ensaios = [Ensaio(os.path.join(self.caminho, diretorio), dados_correcao_horarios=self._dados_correcao_horarios, janela_media_movel=self.janela_media_movel) for diretorio in lista_de_ensaios]
 
     def _redefinir_ids(self):
         for id, ensaio in enumerate(self.ensaios):
