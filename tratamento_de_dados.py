@@ -185,6 +185,9 @@ Temperatura média: {self.temperatura_media:.1f} °C
                 caminho = caminho
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
+            plt.close()
+        else:
+            plt.show()
 
     def _obter_arquivo(self):
         arquivo = os.path.basename(self.caminho)
@@ -389,6 +392,9 @@ Temperatura média: {self.temperatura_media:.1f} °C
                 caminho = caminho
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
+            plt.close()
+        else:
+            plt.show()
 
     def plotar_logaritmo_da_variancia(self, extendida=False, salvar=False, intervalo=None, caminho=None):
         dados = self.obter_logaritmo_da_variancia(extendida)
@@ -418,6 +424,9 @@ Temperatura média: {self.temperatura_media:.1f} °C
                 caminho = caminho
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
+            plt.close()
+        else:
+            plt.show()
 
     def _obter_diretorio(self):
         diretorio = os.path.basename(self.caminho)
@@ -517,6 +526,20 @@ class Experimento:
     
     def __getitem__(self, chave):
         return self.ensaios_dict[chave]
+
+    def obter_tempos_de_mistura(self):
+        tempos_de_mistura = pd.DataFrame()
+        numero_ensaio = list()
+        tempo_de_mistura = list()
+        for ensaio in self.ensaios_dict.values():
+            numero_ensaio.append(ensaio.numero_prefixo)
+            tempo_de_mistura.append(ensaio.tempos_de_mistura[0][0])
+        tempos_de_mistura['Ensaio'] = numero_ensaio
+        tempos_de_mistura['Tempo de mistura [s]'] = tempo_de_mistura
+        tempos_de_mistura['Tempo de mistura [min]'] = tempos_de_mistura['Tempo de mistura [s]'] / 60
+        tempos_de_mistura.set_index('Ensaio', inplace=True)
+        return tempos_de_mistura
+
     
     def obter_resultados(self, diretorio='resultados'):
         diretorio_resultados = os.path.join(self.caminho, diretorio)
@@ -537,17 +560,19 @@ class Experimento:
                     arquivo_relatorio.write(eletrodo.imprimir_relatorio())
         arquivo_relatorio.close()
 
-    def plotar_condutividade_eletrica(self, combinacao, normalizada=False, extendida=False, salvar=False, intervalo=None, caminho=None):
+    def plotar_condutividade_eletrica(self, combinacao, normalizada=False, extendida=False, salvar=False, intervalo=None, caminho=None, nome_do_arquivo=None):
         if normalizada:
             eixo_y = 'Condutividade elétrica normalizada'
             limite_y = [0, 2]
-            nome_do_arquivo = f'fig_gr_perfil_de_condutividade_eletrica_normalizada'
+            if nome_do_arquivo is None:
+                nome_do_arquivo = f'fig_gr_perfil_de_condutividade_eletrica_normalizada'
         else:
             eixo_y = 'Condutividade elétrica [mS]'
             limite_y = None
-            nome_do_arquivo = f'fig_gr_perfil_de_condutividade_eletrica'
+            if nome_do_arquivo is None:
+                nome_do_arquivo = f'fig_gr_perfil_de_condutividade_eletrica'
         lista_de_tempos = list()
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(7, 3.5))
         for ensaio in combinacao:
             for eletrodo in combinacao[ensaio]:
                 condutividade = self[f'ensaio_{ensaio}'][f'eletrodo_{eletrodo}'].obter_condutividade_eletrica(normalizada)
@@ -567,7 +592,7 @@ class Experimento:
         ax.set_ylim(limite_y)
         ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize='x-small')
-        plt.show()
+        plt.tight_layout()
         if salvar:
             if caminho is None:
                 caminho = self.caminho
@@ -575,6 +600,9 @@ class Experimento:
                 caminho = caminho
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
+            plt.close()
+        else:
+            plt.show()
 
     def plotar_logaritmo_da_variancia(self, extendida=False, salvar=False, intervalo=None, caminho=None):
         fig, ax = plt.subplots(figsize=(7, 3.5))
@@ -611,8 +639,11 @@ class Experimento:
                 caminho = caminho
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.png'))
             fig.savefig(os.path.join(caminho, f'{nome_do_arquivo}.pdf'))
+            plt.close()
+        else:
+            plt.show()
     
-    def combinar_ensaios(self, dados, prefixo='ensaio', diretorio='ensaios_novo', colunas=None, lista=None, dados_correcao_horarios=None):
+    def combinar_ensaios(self, dados, prefixo='ensaio', diretorio='ensaios_novo', colunas=None, lista=None, dados_correcao_horarios=None, janela_media_movel=None):
         if type(dados) is list:
             dados = __class__._importar_dados_do_google_sheets(*dados)
         if colunas is None:
@@ -637,7 +668,7 @@ class Experimento:
                     arquivo_antigo = os.path.join(diretorio_ensaio_antigo, f'{ensaio_antigo}_{eletrodo_antigo}.csv')
                     arquivo_novo = os.path.join(diretorio_ensaio_novo, f'{ensaio_novo}_{eletrodo_novo}.csv')
                     shutil.copy(arquivo_antigo, arquivo_novo)
-        return __class__(diretorio, lista=lista, dados_correcao_horarios=dados_correcao_horarios)
+        return __class__(diretorio, lista=lista, dados_correcao_horarios=dados_correcao_horarios, janela_media_movel=janela_media_movel)
 
     def _obter_lista_de_ensaios(self):
         lista_de_diretorios = os.listdir(self.caminho)
