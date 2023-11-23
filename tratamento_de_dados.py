@@ -177,7 +177,6 @@ Temperatura média: {self.temperatura_media:.1f} °C
         ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
         ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
         ax.legend()
-        plt.show()
         if salvar:
             if caminho is None:
                 caminho = os.path.dirname(self.caminho)
@@ -384,7 +383,6 @@ Temperatura média: {self.temperatura_media:.1f} °C
         ax.set_ylim(limite_y)
         ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
         ax.legend()
-        plt.show()
         if salvar:
             if caminho is None:
                 caminho = self.caminho
@@ -415,7 +413,6 @@ Temperatura média: {self.temperatura_media:.1f} °C
         ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
         ax.grid(which='minor')
         ax.legend()
-        plt.show()
         if salvar:
             nome_do_arquivo = f'fig_gr_{self.ensaio}_logaritmo_da_variancia'
             if caminho is None:
@@ -630,7 +627,6 @@ class Experimento:
         ax.grid(which='minor')
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         plt.tight_layout()
-        plt.show()
         if salvar:
             nome_do_arquivo = f'fig_gr_logaritmo_da_variancia'
             if caminho is None:
@@ -767,7 +763,6 @@ class Simulacao:
             'variaveis': ['continuity', 'x-velocity', 'y-velocity', 'z-velocity', 'k', 'omega']
         }
         self._gerar_grafico_individual_outputlog(axs[*indices[-1]], outputlog, **parametros_residuos)
-        plt.show()
         if salvar:
             fig.savefig(os.path.join(self.caminho_running, f'fig_gr_case_{self.numero_da_simulacao}_outputlog.pdf'))
             fig.savefig(os.path.join(self.caminho_running, f'fig_gr_case_{self.numero_da_simulacao}_outputlog.png'))
