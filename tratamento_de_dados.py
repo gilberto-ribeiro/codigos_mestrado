@@ -345,6 +345,7 @@ Temperatura média: {self.temperatura_media:.1f} °C
             dados_condutividade_eletrica.fillna(1.0, inplace=True)
         else:
             dados_condutividade_eletrica.dropna(inplace=True)
+        # dados_condutividade_eletrica = dados_condutividade_eletrica.reindex(columns=sorted(dados_condutividade_eletrica.columns))
         tempo = np.array(dados_condutividade_eletrica.index * self.intervalo_de_tempo)
         dados_condutividade_eletrica.insert(0, 'tempo', tempo)
         return dados_condutividade_eletrica
@@ -411,7 +412,7 @@ Temperatura média: {self.temperatura_media:.1f} °C
         ax.set_ylabel('Logaritmo da variância RMS da\ncondutividade elétrica normalizada')
         ax.set_xlim([0, 15*((tempo[-1]/60)//15)]) if intervalo is None else ax.set_xlim(intervalo)
         ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
-        ax.grid(which='minor')
+        # ax.grid(which='minor')
         ax.legend()
         if salvar:
             nome_do_arquivo = f'fig_gr_{self.ensaio}_logaritmo_da_variancia'
@@ -438,7 +439,7 @@ Temperatura média: {self.temperatura_media:.1f} °C
         self._numero_prefixo = int(padrao_diretorio.search(self.diretorio).group(2))
 
     def _instanciar_condutivimetros(self):
-        lista_de_arquivos = os.listdir(self.caminho)
+        lista_de_arquivos = sorted(os.listdir(self.caminho))
         # Verificar como ordenar os eletrodos:
         # lista_de_arquivos.sort(key=lambda arquivo: int(padrao_csv.search(arquivo).group(4)))
         self._condutivimetros = [Condutivimetro(os.path.join(self.caminho, arquivo), janela_media_movel=self.janela_media_movel) for arquivo in lista_de_arquivos if padrao_csv.search(arquivo)]
@@ -602,7 +603,8 @@ class Experimento:
             plt.show()
 
     def plotar_logaritmo_da_variancia(self, extendida=False, salvar=False, intervalo=None, caminho=None):
-        fig, ax = plt.subplots(figsize=(7, 3.5))
+        fig, ax = plt.subplots()
+        # fig, ax = plt.subplots(figsize=(7, 3.5))
         lista_de_tempos = list()
         for ensaio in self.ensaios:
             dados = ensaio.obter_logaritmo_da_variancia(extendida)
@@ -624,8 +626,9 @@ class Experimento:
         ax.set_ylabel('Logaritmo da variância RMS da\ncondutividade elétrica normalizada')
         ax.set_xlim([0, 15*((tempo_maximo/60)//15)]) if intervalo is None else ax.set_xlim(intervalo)
         ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
-        ax.grid(which='minor')
-        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        # ax.grid(which='minor')
+        ax.legend()
+        # ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         plt.tight_layout()
         if salvar:
             nome_do_arquivo = f'fig_gr_logaritmo_da_variancia'
