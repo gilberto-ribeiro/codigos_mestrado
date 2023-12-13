@@ -406,11 +406,12 @@ Temperatura média: {self.temperatura_media:.1f} °C
                 label=f'{self.prefixo} {self.numero_prefixo}')
         ax.plot([0, tempo[-1]/60] if intervalo is None else intervalo,
                 [self.limite]*2, color='gray', ls='--')
-        ax.text(0, self.limite, f'{self.porcentagem}%: {self.limite:.2f}', color='gray', fontsize='xx-small')
+        ax.text(0, self.limite, f'{self.porcentagem}\\%: {self.limite:.2f}', color='gray', fontsize='xx-small')
         ax.set_title(f'Logaritmo da variância RMS por tempo')
         ax.set_xlabel('Tempo [min]')
         ax.set_ylabel('Logaritmo da variância RMS da\ncondutividade elétrica normalizada')
         ax.set_xlim([0, 15*((tempo[-1]/60)//15)]) if intervalo is None else ax.set_xlim(intervalo)
+        ax.set_ylim([-6, 2])
         ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
         # ax.grid(which='minor')
         ax.legend()
@@ -539,19 +540,19 @@ class Experimento:
         return tempos_de_mistura
 
     
-    def obter_resultados(self, diretorio='resultados'):
+    def obter_resultados(self, diretorio='resultados', intervalo=None):
         diretorio_resultados = os.path.join(self.caminho, diretorio)
         diretorio_figuras = os.path.join(diretorio_resultados, 'figuras')
         if os.path.exists(diretorio_resultados):
             shutil.rmtree(diretorio_resultados)
         os.mkdir(diretorio_resultados)
         os.mkdir(diretorio_figuras)
-        self.plotar_logaritmo_da_variancia(salvar=True, caminho=diretorio_figuras)
+        self.plotar_logaritmo_da_variancia(salvar=True, caminho=diretorio_figuras, intervalo=intervalo)
         with open(os.path.join(diretorio_resultados, 'relatorio.txt'), 'w') as arquivo_relatorio:
             arquivo_relatorio.write('RELATÓRIO DO EXPERIMENTO\n')
             for ensaio in self.ensaios:
                 ensaio.plotar_condutividade_eletrica(normalizada=True, salvar=True, caminho=diretorio_figuras)
-                ensaio.plotar_logaritmo_da_variancia(salvar=True, caminho=diretorio_figuras)
+                ensaio.plotar_logaritmo_da_variancia(salvar=True, caminho=diretorio_figuras, intervalo=intervalo)
                 arquivo_relatorio.write('\n' + '-' * 80 + f' {ensaio.numero_prefixo:02}' + '\n')
                 arquivo_relatorio.write(ensaio.imprimir_relatorio())
                 for eletrodo in ensaio.condutivimetros:
@@ -620,10 +621,11 @@ class Experimento:
         # Refatorar as duas linhas a baixo, pois pega limite e porcentagem do último ensaio
         ax.plot([0, tempo_maximo/60] if intervalo is None else intervalo,
                 [limite]*2, color='gray', ls='--')
-        ax.text(0, limite, f'{porcentagem}%: {limite:.2f}', color='gray', fontsize='xx-small')
-        ax.set_title(f'Logaritmo da variância RMS por tempo')
+        ax.text(0, limite, f'{porcentagem}\\%: {limite:.2f}', color='gray', fontsize='xx-small')
+        ax.set_title('Logaritmo da variância RMS por tempo')
         ax.set_xlabel('Tempo [min]')
         ax.set_ylabel('Logaritmo da variância RMS da\ncondutividade elétrica normalizada')
+        ax.set_ylim([-6, 2])
         ax.set_xlim([0, 15*((tempo_maximo/60)//15)]) if intervalo is None else ax.set_xlim(intervalo)
         ax.xaxis.set_major_locator(ticker.MultipleLocator(5))
         # ax.grid(which='minor')
@@ -696,7 +698,122 @@ class Experimento:
         id_planilha = re.search('https://docs.google.com/spreadsheets/d/(.*)/', url_planilha).group(1)
         url = f'https://docs.google.com/spreadsheets/d/{id_planilha}/gviz/tq?tqx=out:csv&sheet={aba_planilha}'
         return pd.read_csv(url)
+
+
+class Torquimetro:
+    def __init__(self, caminho, janela_media_movel=None):
+        self._caminho = caminho
+        self._janela_media_movel = janela_media_movel
+        self._obter_arquivo()
+        self._obter_base_de_dados()
+        self._tratar_base_de_dados()
+        
+    @property
+    def janela_media_movel(self):
+        return self._janela_media_movel
     
+    @property
+    def caminho(self):
+        return self._caminho
+
+    @property
+    def arquivo(self):
+        return self._arquivo
+    
+    @property
+    def numero_prefixo(self):
+        return self._numero_prefixo
+    
+    @property
+    def dados_originais(self):
+        return self._dados_originais
+    
+    @property
+    def dados_tratados(self):
+        return self._dados_tratados
+    
+    @property
+    def dados_tratados_originais(self):
+        return self._dados_tratados_originais
+    
+    @property
+    def torque_medio(self):
+        return self._dados_tratados['torque'].mean()
+    
+    @property
+    def potencia_media(self):
+        return self._dados_tratados['potencia'].mean()
+    
+    def obter_torque_medio(self, intervalo=None):
+        if intervalo is None:
+            return self.torque_medio
+        else:
+            selecao = (self.dados_tratados['tempo'] >= 60 * intervalo[0]) & (self.dados_tratados['tempo'] <= 60 * intervalo[1])
+            return self.dados_tratados[selecao]['torque'].mean()
+        
+    def obter_potencia_media(self, intervalo=None):
+        if intervalo is None:
+            return self.potencia_media
+        else:
+            selecao = (self.dados_tratados['tempo'] >= 60 * intervalo[0]) & (self.dados_tratados['tempo'] <= 60 * intervalo[1])
+            return self.dados_tratados[selecao]['potencia'].mean()
+        
+    def plotar_graficos(self, salvar=False, caminho=None):
+        fig, axs = plt.subplots(2, 1)
+        if self.janela_media_movel is None:
+            axs[0].plot(self.dados_tratados['tempo'] / 60, self.dados_tratados['torque'], color='C0')
+        else:
+            axs[0].plot(self.dados_tratados['tempo'] / 60, self.dados_tratados['torque_media_movel'], color='C0', lw=1)
+            axs[0].plot(self.dados_tratados['tempo'] / 60, self.dados_tratados['torque'], color='C0', alpha=0.25)
+        axs[0].set_title('Torque e potência por tempo')
+        axs[0].set_ylabel('Torque (N.m)')
+        axs[0].set_xlim([0, 5*((self.dados_tratados['tempo'].iloc[-1]/60)//5+1)])
+        axs[0].xaxis.set_major_locator(ticker.MultipleLocator(5))
+        axs[0].grid(which='minor')
+        if self.janela_media_movel is None:
+            axs[1].plot(self.dados_tratados['tempo'] / 60, self.dados_tratados['potencia'], color='C1')
+        else:
+            axs[1].plot(self.dados_tratados['tempo'] / 60, self.dados_tratados['potencia_media_movel'], color='C1', lw=1)
+            axs[1].plot(self.dados_tratados['tempo'] / 60, self.dados_tratados['potencia'], color='C1', alpha=0.25)
+        axs[1].set_xlabel('Tempo (min)')
+        axs[1].set_ylabel('Potência (W)')
+        axs[1].set_xlim([0, 5*((self.dados_tratados['tempo'].iloc[-1]/60)//5+1)])
+        axs[1].xaxis.set_major_locator(ticker.MultipleLocator(5))
+        axs[1].grid(which='minor')
+        if salvar:
+            if caminho is None:
+                caminho = self.caminho
+            else:
+                caminho = caminho
+            fig.savefig(os.path.join(caminho, f'fig_gr_{self.numero_prefixo}_torque_e_potencia.png'))
+            fig.savefig(os.path.join(caminho, f'fig_gr_{self.numero_prefixo}_torque_e_potencia.pdf'))
+            plt.close()
+        else:
+            plt.show()
+
+    def _obter_arquivo(self):
+        padrao_torquimetro = re.compile('\w_(\d)_torque.\.xlsx')
+        arquivo = os.path.basename(self.caminho)
+        if padrao_torquimetro.search(arquivo):
+            self._arquivo = arquivo
+            self._numero_prefixo = int(padrao_torquimetro.search(self.arquivo).group(1))
+        else:
+            pass
+        
+    def _obter_base_de_dados(self):
+        self._dados_originais = pd.read_excel(self.caminho, sheet_name=0, header=2, decimal=',')
+        
+    def _tratar_base_de_dados(self):
+        dados = self.dados_originais.copy()
+        colunas_renomeadas = ['velocidade', 'torque', 'tempo', 'potencia']
+        colunas_mapeadas = {coluna: coluna_renomeada for coluna, coluna_renomeada in zip(dados.columns, colunas_renomeadas)}
+        dados.rename(columns=colunas_mapeadas, inplace=True)
+        dados = dados.astype('float64')
+        dados = dados.reindex(columns=['tempo', 'velocidade', 'torque', 'potencia'])
+        self._dados_tratados_originais = dados
+        self._dados_tratados = dados.copy()
+        if type(self.janela_media_movel) is int and self.janela_media_movel != 0:
+            self._dados_tratados[['torque_media_movel', 'potencia_media_movel']] = self._dados_tratados[['torque', 'potencia']].rolling(self.janela_media_movel, min_periods=1).mean()
 
 class Simulacao:
 
@@ -740,7 +857,7 @@ class Simulacao:
                         colunas_reports = [coluna for coluna in colunas \
                                           if coluna not in (coluna_iteracao + colunas_residuos)]
                         flag = True
-                    if flag and re.search('\d$', linha):
+                    if flag and re.search('^\d.*\d$', linha.strip()):
                         dados.append(linha.strip().split()[0:-2])
             arquivo.close()
             dados = pd.DataFrame(dados, columns=colunas)
